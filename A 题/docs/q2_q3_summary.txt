@@ -1,27 +1,27 @@
-问题2（固定问题1机队规模；分层优化：Tmax* 容差上限内最小化 delta）
-Case1: N=4, Tmax=8.925973 h, Tmin=8.883563 h, delta=0.042411 h, total=35.656594 h, wait=0.000000 h
-  route_hours=[8.921839, 8.883563, 8.925973, 8.925219]
+问题2（固定问题1机队规模；ε=0 主口径，多种子热启动分层 GA）
+Case1: N=4, Tmax=8.925973 h, Tmin=8.921839 h, delta=0.004135 h, total=35.695118 h, wait=0.000000 h
+  route_hours=[8.921839, 8.922086, 8.925973, 8.925219]
   wait_hours=[0.0, 0.0, 0.0, 0.0]
-Case2: N=2, Tmax=7.636653 h, Tmin=7.626648 h, delta=0.010005 h, total=15.263301 h, wait=0.000000 h
-  route_hours=[7.626648, 7.636653]
+Case2: N=2, Tmax=7.636653 h, Tmin=7.633259 h, delta=0.003394 h, total=15.269912 h, wait=0.000000 h
+  route_hours=[7.633259, 7.636653]
   wait_hours=[0.0, 0.0]
-Case3: N=5, Tmax=8.715557 h, Tmin=8.689821 h, delta=0.025736 h, total=43.528150 h, wait=0.000000 h
-  route_hours=[8.71496, 8.694397, 8.713415, 8.689821, 8.715557]
+Case3: N=5, Tmax=8.715557 h, Tmin=8.703879 h, delta=0.011679 h, total=43.558372 h, wait=0.000000 h
+  route_hours=[8.71496, 8.703879, 8.713415, 8.710561, 8.715557]
   wait_hours=[0.0, 0.0, 0.0, 0.0, 0.0]
-Case4: N=4, Tmax=8.959070 h, Tmin=8.900889 h, delta=0.058181 h, total=35.699928 h, wait=0.000000 h
-  route_hours=[8.95907, 8.907415, 8.900889, 8.932554]
+Case4: N=4, Tmax=8.959070 h, Tmin=8.927368 h, delta=0.031702 h, total=35.746558 h, wait=0.000000 h
+  route_hours=[8.95907, 8.927368, 8.927566, 8.932554]
   wait_hours=[0.0, 0.0, 0.0, 0.0]
 
 问题3（08:00出发；等待直飞与圆外切线绕飞取较早到达）
-Case1: N=4, Tmax=8.925973 h, Tmin=8.921839 h, delta=0.004135 h, total=35.697539 h, wait=0.000000 h
-  route_hours=[8.921839, 8.924508, 8.925973, 8.925219]
+Case1: N=4, Tmax=8.925973 h, Tmin=8.921839 h, delta=0.004135 h, total=35.695118 h, wait=0.000000 h
+  route_hours=[8.921839, 8.922086, 8.925973, 8.925219]
   wait_hours=[0.0, 0.0, 0.0, 0.0]
-Case2: N=2, Tmax=11.329129 h, Tmin=11.328327 h, delta=0.000802 h, total=22.657456 h, wait=3.884078 h
-  route_hours=[11.328327, 11.329129]
-  wait_hours=[2.06654, 1.817539]
-Case3: N=5, Tmax=9.199556 h, Tmin=9.006742 h, delta=0.192814 h, total=45.574981 h, wait=0.000000 h
-  route_hours=[9.199556, 9.100727, 9.137095, 9.006742, 9.13086]
+Case2: N=2, Tmax=11.069161 h, Tmin=10.976426 h, delta=0.092734 h, total=22.045587 h, wait=3.283217 h
+  route_hours=[10.976426, 11.069161]
+  wait_hours=[1.663432, 1.619785]
+Case3: N=5, Tmax=9.127126 h, Tmin=9.080373 h, delta=0.046754 h, total=45.528291 h, wait=0.000000 h
+  route_hours=[9.080373, 9.100727, 9.119728, 9.127126, 9.100338]
   wait_hours=[0.0, 0.0, 0.0, 0.0, 0.0]
-Case4: N=4, Tmax=9.987548 h, Tmin=9.941512 h, delta=0.046035 h, total=39.835674 h, wait=0.000000 h
-  route_hours=[9.957099, 9.949515, 9.987548, 9.941512]
+Case4: N=4, Tmax=9.900550 h, Tmin=9.863064 h, delta=0.037486 h, total=39.546151 h, wait=0.000000 h
+  route_hours=[9.90055, 9.863064, 9.888856, 9.89368]
   wait_hours=[0.0, 0.0, 0.0, 0.0]

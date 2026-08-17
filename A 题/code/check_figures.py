@@ -64,7 +64,7 @@ if os.path.exists(bp):
             print("  %s N=%s avg=%.4fh %s" % (parts[0], parts[1], avg, verdict))
 
 print()
-print("== 4. 快照图严谨性断言：快照时刻无无人机位于生效圆内 ==")
+print("== 4. 轨迹活动端点断言：活动段起点/终点不得位于生效圆内部 ==")
 spec = importlib.util.spec_from_file_location("viz", r"d:\数模校赛\A 题\code\visualize.py")
 viz = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(viz)
@@ -73,21 +73,17 @@ for sheet in ("Case1", "Case2", "Case3", "Case4"):
     coords, levels = viz._coords_and_levels(sheet)
     zones = load_zones(sheet)
     routes = load_routes(RESULT3, sheet)
-    traces = []
-    for r in routes:
+    for k, r in enumerate(routes):
         acts, labels, total = viz._trace_route(r, coords, zones)
-        traces.append((acts, total))
-    times = sorted({z.start / 3600 for z in zones} | {z.end / 3600 for z in zones})
-    for t in times:
-        active = [z for z in zones if z.start / 3600 - 1e-9 <= t <= z.end / 3600 + 1e-9]
-        for k, (acts, total) in enumerate(traces):
-            pos = viz._position_at(acts, t * 3600)
-            if pos is None:
-                continue
-            for z in active:
-                if math.dist(pos, (z.x, z.y)) < z.radius - 1e-6:
-                    viol += 1
-                    print("  违规: %s t=%.2fh UAV%d 在生效圆 %s 内" % (sheet, 8 + t, k + 1, z.zid))
+        for kind, t0, t1, x0, y0, x1, y1, note in acts:
+            for t, x, y in ((t0, x0, y0), (t1, x1, y1)):
+                active = [z for z in zones
+                          if z.start - 1e-6 <= t <= z.end + 1e-6]
+                for z in active:
+                    if math.dist((x, y), (z.x, z.y)) < z.radius - 1e-6:
+                        viol += 1
+                        print("  违规: %s t=%.2fh UAV%d (%s) 在生效圆 %s 内"
+                              % (sheet, 8 + t / 3600, k + 1, kind, z.zid))
 print("  违规数: %d -> %s" % (viol, "PASS" if viol == 0 else "FAIL"))
 
 print()

@@ -29,9 +29,6 @@ from solve_q2_q3 import (
 from audit_q2_q3 import _timed_leg_trace
 
 FIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
-FIG_Q1 = os.path.join(FIG_DIR, "q1")
-FIG_Q2 = os.path.join(FIG_DIR, "q2")
-FIG_Q3 = os.path.join(FIG_DIR, "q3")
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei"]
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -108,7 +105,7 @@ def plot_q1_routes(sheets=CASES):
         ax.legend(fontsize=8, loc="best")
         ax.grid(alpha=0.25)
         fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q1, f"q1_routes_{sheet}.png"), dpi=150)
+        fig.savefig(os.path.join(FIG_DIR, f"q1_routes_{sheet}.png"), dpi=150)
         plt.close(fig)
     print("图1 完成：q1_routes_*.png")
 
@@ -120,7 +117,6 @@ def plot_q1_lowerbound():
     if os.path.exists(bounds_path):
         for line in open(bounds_path, encoding="utf-8"):
             parts = line.split()
-            # 列: case N visits distance_lb(km) total_lb(h) avg_lb(h) excluded
             if len(parts) >= 7 and parts[0] in CASES:
                 data.setdefault(parts[0], []).append((int(parts[1]), float(parts[5])))
     if not data:
@@ -136,14 +132,13 @@ def plot_q1_lowerbound():
         ax.axhline(9.0, color="k", linestyle="--", linewidth=1.0)
         ax.text(0.02, 9.05, "9h 判定线", fontsize=8)
         ax.set_title(sheet, fontsize=11)
-        ax.set_xlabel("N（无人机数）")
-        ax.set_ylabel("平均负载下界 (h/架)")
+        ax.set_xlabel("N")
+        ax.set_ylabel("平均负载下界 (h)")
         ax.set_ylim(0, max(ys) * 1.15)
         ax.grid(alpha=0.25)
-    fig.suptitle("问题1 循环覆盖平均负载下界（绿色=未能排除；红色=该 N 严格不可行）",
-                 fontsize=11)
+    fig.suptitle("问题1 循环覆盖平均负载下界（绿=未排除，红=该 N 严格不可行）", fontsize=11)
     fig.tight_layout()
-    fig.savefig(os.path.join(FIG_Q1, "q1_lowerbound.png"), dpi=150)
+    fig.savefig(os.path.join(FIG_DIR, "q1_lowerbound.png"), dpi=150)
     plt.close(fig)
     print("图2 完成：q1_lowerbound.png")
 
@@ -174,7 +169,7 @@ def plot_q2_balance(sheets=CASES):
         ax.legend(fontsize=8)
         ax.grid(alpha=0.25, axis="y")
         fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q2, f"q2_balance_{sheet}.png"), dpi=150)
+        fig.savefig(os.path.join(FIG_DIR, f"q2_balance_{sheet}.png"), dpi=150)
         plt.close(fig)
     print("图3 完成：q2_balance_*.png")
 
@@ -194,19 +189,20 @@ def plot_q3_spacetime(sheets=CASES):
                            marker=mk, s=22, c=c, edgecolors="white", linewidths=0.4,
                            label=f"{lvl}级", zorder=3)
         ax.scatter([0], [0], marker="*", s=260, c="black", zorder=4, label="基地")
-        # 分时禁飞区：灰色虚线表示“仅在标注时段生效”，避免误读为全天禁飞
+        # 禁飞区
         for z in zones:
             h0 = z.start / 3600 + 8
             h1 = z.end / 3600 + 8
-            ax.add_patch(Circle((z.x, z.y), z.radius, fill=False,
-                                edgecolor="#888888", linewidth=1.2,
-                                linestyle=(0, (4, 3)), zorder=1))
+            ax.add_patch(Circle((z.x, z.y), z.radius, fill=True, facecolor="#d62728",
+                                alpha=0.07, edgecolor="#d62728", linewidth=1.2,
+                                linestyle="-", zorder=1))
             ax.text(z.x, z.y + z.radius + 3, f"{z.zid} {h0:.1f}-{h1:.1f}h",
-                    fontsize=7.5, color="#555555", ha="center")
+                    fontsize=7.5, color="#a50f15", ha="center")
         # 各机轨迹 + 等待点
         for k, r in enumerate(routes):
             color = COLORS[k % len(COLORS)]
             acts, labels, total = _trace_route(r, coords, zones)
+            # 按 leg 聚合 flight 段折线（连续）
             xs, ys = [0.0], [0.0]
             for kind, t0, t1, x0, y0, x1, y1, note in acts:
                 if kind == "flight":
@@ -217,90 +213,22 @@ def plot_q3_spacetime(sheets=CASES):
                     ys.append(y1)
             ax.plot(xs, ys, "-", color=color, linewidth=1.5, alpha=0.9,
                     label=f"UAV{k+1}（{total/3600:.2f}h）", zorder=2)
+            # 等待点
             for kind, t0, t1, x0, y0, x1, y1, note in acts:
                 if kind == "wait" and t1 > t0 + 1e-3:
                     ax.scatter([x0], [y0], marker="v", s=60, color=color,
                                edgecolors="black", linewidths=0.5, zorder=5)
-        ax.set_title(f"问题3 全天轨迹投影（{sheet}，N={len(routes)}）\n"
-                     f"灰虚圈=分时禁飞区（仅在标注时段生效）；路径穿圈仅发生在管制时段外",
-                     fontsize=10.5)
+        ax.set_title(f"问题3 时空轨迹（{sheet}，N={len(routes)}，含禁飞区）\n"
+                     f"倒三角=圆外等待点，红圈=分时禁飞区")
         ax.set_xlabel("x（坐标单位）")
         ax.set_ylabel("y（坐标单位）")
         ax.set_aspect("equal", adjustable="datalim")
         ax.legend(fontsize=7.5, loc="best")
         ax.grid(alpha=0.25)
         fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q3, f"q3_spacetime_{sheet}.png"), dpi=150)
+        fig.savefig(os.path.join(FIG_DIR, f"q3_spacetime_{sheet}.png"), dpi=150)
         plt.close(fig)
     print("图4 完成：q3_spacetime_*.png")
-
-
-# ---------------------------- 图4b：Q3 多时刻快照 ----------------------------
-def _position_at(acts, t):
-    for kind, t0, t1, x0, y0, x1, y1, note in acts:
-        if t0 - 1e-6 <= t <= t1 + 1e-6:
-            if kind in ("wait", "service") or t1 <= t0:
-                return (x0, y0)
-            f = (t - t0) / (t1 - t0)
-            return (x0 + (x1 - x0) * f, y0 + (y1 - y0) * f)
-    return None
-
-
-def plot_q3_snapshots(sheets=CASES):
-    for sheet in sheets:
-        coords, levels = _coords_and_levels(sheet)
-        zones = load_zones(sheet)
-        routes = load_routes(RESULT3, sheet)
-        traces = []
-        for r in routes:
-            acts, labels, total = _trace_route(r, coords, zones)
-            traces.append((acts, total))
-        # 快照时刻：每个禁飞窗的起始与结束（保证覆盖“最危险”的时刻）
-        times = sorted({z.start / 3600 for z in zones} | {z.end / 3600 for z in zones})
-        times = [t for t in times if t <= max((tr[1] for tr in traces), default=0) / 3600]
-        if not times:
-            continue
-        cols = 3
-        rows_n = (len(times) + cols - 1) // cols
-        fig, axes = plt.subplots(rows_n, cols, figsize=(cols * 4.4, rows_n * 4.2))
-        flat = axes.flatten() if hasattr(axes, "flatten") else [axes]
-        for ax, t in zip(flat, times):
-            for lvl, (mk, c) in LVL_STYLE.items():
-                ids = [p for p, l in levels.items() if l == lvl]
-                if ids:
-                    ax.scatter([coords[p][0] for p in ids], [coords[p][1] for p in ids],
-                               marker=mk, s=16, c=c, edgecolors="white", linewidths=0.3, zorder=2)
-            ax.scatter([0], [0], marker="*", s=200, c="black", zorder=4)
-            for z in zones:
-                active = z.start / 3600 <= t <= z.end / 3600
-                if active:
-                    ax.add_patch(Circle((z.x, z.y), z.radius, fill=True,
-                                        facecolor="#d62728", alpha=0.12,
-                                        edgecolor="#d62728", linewidth=1.6, zorder=1))
-                    ax.text(z.x, z.y, z.zid, fontsize=8, color="#a50f15",
-                            ha="center", va="center", fontweight="bold")
-                else:
-                    ax.add_patch(Circle((z.x, z.y), z.radius, fill=False,
-                                        edgecolor="#aaaaaa", linewidth=0.9,
-                                        linestyle=(0, (4, 3)), zorder=1))
-            for k, (acts, total) in enumerate(traces):
-                pos = _position_at(acts, t * 3600)
-                if pos is not None:
-                    ax.scatter([pos[0]], [pos[1]], marker="o", s=60,
-                               c=COLORS[k % len(COLORS)], edgecolors="black",
-                               linewidths=0.6, zorder=5)
-            ax.set_title(f"t = {8 + t:.2f} h（红=生效禁飞区）", fontsize=10)
-            ax.set_aspect("equal", adjustable="datalim")
-            ax.tick_params(labelsize=7)
-            ax.grid(alpha=0.2)
-        for ax in flat[len(times):]:
-            ax.axis("off")
-        fig.suptitle(f"问题3 分时禁飞区快照（{sheet}）：各无人机位置与当时生效的禁飞区",
-                     fontsize=12)
-        fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q3, f"q3_snapshots_{sheet}.png"), dpi=150)
-        plt.close(fig)
-    print("图4b 完成：q3_snapshots_*.png")
 
 
 # ---------------------------- 图5：Q3 时间轴 ----------------------------
@@ -311,6 +239,7 @@ def plot_q3_timeline(sheets=CASES):
         routes = load_routes(RESULT3, sheet)
         n = len(routes)
         fig, ax = plt.subplots(figsize=(10, 1.0 + 0.85 * n))
+        latest_route_end = 0.0
         # 禁飞窗带
         for zi, z in enumerate(zones):
             ax.axvspan(z.start / 3600, z.end / 3600, color="#d62728", alpha=0.10)
@@ -318,13 +247,14 @@ def plot_q3_timeline(sheets=CASES):
                     f"{z.zid}", fontsize=7, color="#a50f15", ha="center")
         for k, r in enumerate(routes):
             acts, labels, total = _trace_route(r, coords, zones)
+            latest_route_end = max(latest_route_end, total)
             for kind, t0, t1, x0, y0, x1, y1, note in acts:
                 h0, h1 = t0 / 3600, t1 / 3600
                 if h1 - h0 < 1e-5:
                     continue
                 if kind == "flight":
                     ax.barh(n - 1 - k, h1 - h0, left=h0, height=0.42,
-                            color=COLORS[k % len(COLORS)], alpha=0.75)
+                            color="#1f77b4", alpha=0.75)
                 elif kind == "service":
                     ax.barh(n - 1 - k, h1 - h0, left=h0, height=0.30,
                             color="#ff7f0e", alpha=0.95)
@@ -334,11 +264,12 @@ def plot_q3_timeline(sheets=CASES):
         ax.set_yticks(list(range(n)))
         ax.set_yticklabels([f"UAV{i+1}" for i in range(n)][::-1])
         ax.set_xlabel("时间（h，自 08:00 起）")
-        ax.set_xlim(0, max((z.end for z in zones), default=0) / 3600 + 0.5)
+        latest_zone_end = max((z.end for z in zones), default=0.0)
+        ax.set_xlim(0, max(latest_zone_end, latest_route_end) / 3600 + 0.5)
         ax.set_title(f"问题3 时间轴（{sheet}）：蓝=飞行 橙=服务 红=等待，浅红带=禁飞窗")
         ax.grid(alpha=0.25, axis="x")
         fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q3, f"q3_timeline_{sheet}.png"), dpi=150)
+        fig.savefig(os.path.join(FIG_DIR, f"q3_timeline_{sheet}.png"), dpi=150)
         plt.close(fig)
     print("图5 完成：q3_timeline_*.png")
 
@@ -355,16 +286,20 @@ def plot_summary():
         t1 = [static_metric(r, coords).total / 3600 for r in r1]
         t2 = [static_metric(r, coords).total / 3600 for r in r2]
         t3 = [dynamic_metric(r, coords, zones).total / 3600 for r in r3]
-        rows.append((sheet, len(r1), max(t1), max(t1) - min(t1), max(t2),
+        rows.append((sheet, len(r1), max(t1), max(t1) - min(t1),
                      max(t2) - min(t2), max(t3), max(t3) - min(t3)))
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 3.4))
     x = list(range(4))
+    for ax, idx, ylabel, title in (
+            (axes[0], 2, "Tmax (h)", "三问 Tmax 对比"),
+            (axes[1], 3, "δ (h)", "问题2/3 均衡度对比")):
+        pass
     # Tmax
     ax = axes[0]
     w = 0.26
     ax.bar([i - w for i in x], [r[2] for r in rows], w, color="#9ecae1", label="问题1")
-    ax.bar([i for i in x], [r[4] for r in rows], w, color="#1f77b4", label="问题2")
-    ax.bar([i + w for i in x], [r[6] for r in rows], w, color="#d62728", label="问题3")
+    ax.bar([i for i in x], [r[2] for r in rows], w, color="#1f77b4", label="问题2")
+    ax.bar([i + w for i in x], [r[5] for r in rows], w, color="#d62728", label="问题3")
     ax.axhline(9, color="k", linestyle="--", linewidth=1)
     ax.set_xticks(x)
     ax.set_xticklabels([r[0] for r in rows])
@@ -373,167 +308,30 @@ def plot_summary():
     ax.grid(alpha=0.25, axis="y")
     # delta
     ax = axes[1]
-    ax.bar([i - w / 2 for i in x], [r[5] for r in rows], w, color="#1f77b4", label="问题2 δ")
-    ax.bar([i + w / 2 for i in x], [r[7] for r in rows], w, color="#d62728", label="问题3 δ")
+    ax.bar([i - w / 2 for i in x], [r[4] for r in rows], w, color="#1f77b4", label="问题2 δ")
+    ax.bar([i + w / 2 for i in x], [r[6] for r in rows], w, color="#d62728", label="问题3 δ")
     ax.set_xticks(x)
     ax.set_xticklabels([r[0] for r in rows])
     ax.set_ylabel("δ (h)")
     ax.legend(fontsize=8)
     ax.grid(alpha=0.25, axis="y")
-    n_labels = " / ".join(str(r[1]) for r in rows)
-    fig.suptitle(f"三问结果汇总（各算例 N：{n_labels}）")
+    fig.suptitle("三问结果汇总（N：4 / 2 / 5 / 4）")
     fig.tight_layout()
     fig.savefig(os.path.join(FIG_DIR, "summary.png"), dpi=150)
     plt.close(fig)
     print("图6 完成：summary.png")
 
 
-# ---------------------------- 图7：渐变色路线图 ----------------------------
-def plot_q1_routes_gradient(sheets=CASES):
-    """路线按访问顺序着色（plasma 渐变色带），基地出发-返回全程可见顺序。"""
-    from matplotlib.collections import LineCollection
-    import numpy as np
-    for sheet in sheets:
-        coords, levels = _coords_and_levels(sheet)
-        routes = load_routes(RESULT1, sheet)
-        fig, ax = plt.subplots(figsize=(6.4, 6.4))
-        for lvl, (mk, c) in LVL_STYLE.items():
-            ids = [p for p, l in levels.items() if l == lvl]
-            if ids:
-                ax.scatter([coords[p][0] for p in ids], [coords[p][1] for p in ids],
-                           marker=mk, s=26, c=c, edgecolors="white", linewidths=0.4,
-                           label=f"{lvl}级（{LEVEL_TIMES[lvl]}次）", zorder=3)
-        ax.scatter([0], [0], marker="*", s=260, c="black", zorder=5, label="基地 (0,0)")
-        cmap = plt.get_cmap("plasma")
-        for k, r in enumerate(routes):
-            pts = [(0.0, 0.0)] + [coords[p] for p in r] + [(0.0, 0.0)]
-            segs = [(pts[i], pts[i + 1]) for i in range(len(pts) - 1)]
-            lc = LineCollection(segs, cmap=cmap, linewidth=2.2, zorder=2)
-            lc.set_array(np.linspace(0, 1, len(segs)))
-            ax.add_collection(lc)
-        ax.set_title(f"问题1 巡检路线渐变色图（{sheet}，N={len(routes)}）\n"
-                     "颜色深浅表示访问先后（深紫=出发段，亮黄=返航段）", fontsize=10.5)
-        ax.set_xlabel("x（坐标单位，1单位=100m）")
-        ax.set_ylabel("y（坐标单位）")
-        ax.set_aspect("equal", adjustable="datalim")
-        ax.legend(fontsize=8, loc="best")
-        ax.grid(alpha=0.25)
-        fig.colorbar(lc, ax=ax, fraction=0.04, pad=0.02, label="访问进度")
-        fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q1, f"q1_routes_gradient_{sheet}.png"), dpi=150)
-        plt.close(fig)
-    print("图7 完成：q1_routes_gradient_*.png")
-
-
-# ---------------------------- 图8：三问热力图 ----------------------------
-def plot_summary_heatmap():
-    import numpy as np
-    q_tmax = np.zeros((4, 3))
-    q_delta = np.zeros((4, 2))
-    for i, sheet in enumerate(CASES):
-        coords, _ = _coords_and_levels(sheet)
-        r1 = load_routes(RESULT1, sheet)
-        r2 = load_routes(RESULT2, sheet)
-        r3 = load_routes(RESULT3, sheet)
-        zones = load_zones(sheet)
-        t1 = [static_metric(r, coords).total / 3600 for r in r1]
-        t2 = [static_metric(r, coords).total / 3600 for r in r2]
-        t3 = [dynamic_metric(r, coords, zones).total / 3600 for r in r3]
-        q_tmax[i] = [max(t1), max(t2), max(t3)]
-        q_delta[i] = [max(t2) - min(t2), max(t3) - min(t3)]
-    fig, axes = plt.subplots(1, 2, figsize=(9.5, 4.2))
-    cmap1 = plt.get_cmap("RdYlGn_r")
-    im = axes[0].imshow(q_tmax, cmap=cmap1, vmin=6.5, vmax=12.0, aspect="auto")
-    axes[0].set_xticks(range(3))
-    axes[0].set_xticklabels(["问题1", "问题2", "问题3"])
-    axes[0].set_yticks(range(4))
-    axes[0].set_yticklabels(CASES)
-    for i in range(4):
-        for j in range(3):
-            axes[0].text(j, i, f"{q_tmax[i, j]:.3f}", ha="center", va="center",
-                         color="white" if q_tmax[i, j] > 9.5 else "black", fontsize=9)
-    axes[0].set_title("Tmax (h) 热力图")
-    fig.colorbar(im, ax=axes[0], fraction=0.046, pad=0.02)
-    cmap2 = plt.get_cmap("YlOrRd")
-    im2 = axes[1].imshow(q_delta, cmap=cmap2, vmin=0, vmax=0.25, aspect="auto")
-    axes[1].set_xticks(range(2))
-    axes[1].set_xticklabels(["问题2", "问题3"])
-    axes[1].set_yticks(range(4))
-    axes[1].set_yticklabels(CASES)
-    for i in range(4):
-        for j in range(2):
-            axes[1].text(j, i, f"{q_delta[i, j]:.3f}", ha="center", va="center",
-                         color="white" if q_delta[i, j] > 0.15 else "black", fontsize=9)
-    axes[1].set_title("δ (h) 热力图")
-    fig.colorbar(im2, ax=axes[1], fraction=0.046, pad=0.02)
-    fig.suptitle("三问结果热力图（颜色越深表示数值越大）")
-    fig.tight_layout()
-    fig.savefig(os.path.join(FIG_DIR, "summary_heatmap.png"), dpi=150)
-    plt.close(fig)
-    print("图8 完成：summary_heatmap.png")
-
-
-# ---------------------------- 图9：Tmax-δ 权衡曲线 ----------------------------
-def plot_q2_tradeoff(sheets=CASES):
-    import json
-    import numpy as np
-    data_path = os.path.join(FIG_Q2, "q2_tradeoff_data.json")
-    if not os.path.exists(data_path):
-        print("图9 跳过：未找到 q2_tradeoff_data.json（先运行 tradeoff_q2.py）")
-        return
-    data = json.load(open(data_path, encoding="utf-8"))
-    cmap = plt.get_cmap("coolwarm")
-    for sheet in sheets:
-        entry = data.get(sheet)
-        if entry is None:
-            continue
-        pts = entry["points"]
-        fig, ax = plt.subplots(figsize=(6.4, 4.2))
-        cmap = plt.get_cmap("coolwarm")
-        colors = [cmap(i / max(1, len(pts) - 1)) for i in range(len(pts))]
-        for idx, p in enumerate(pts):
-            ax.scatter([p["Tmax_h"]], [p["delta_h"]], s=110, color=colors[idx],
-                       edgecolors="black", linewidths=0.6, zorder=3)
-            ax.annotate(f"ε={p['relax']*100:.1f}%", (p["Tmax_h"], p["delta_h"]),
-                        textcoords="offset points", xytext=(8, 5), fontsize=8)
-        # Pareto 下包络（有效前沿）：按 Tmax 升序取 δ 单调下降的拐点
-        ordered = sorted(pts, key=lambda p: p["Tmax_h"])
-        envelope = []
-        best_delta = float("inf")
-        for p in ordered:
-            if p["delta_h"] < best_delta - 1e-9:
-                envelope.append(p)
-                best_delta = p["delta_h"]
-        if envelope:
-            ax.plot([p["Tmax_h"] for p in envelope], [p["delta_h"] for p in envelope],
-                    "-", color="#555555", linewidth=1.6, zorder=2, label="有效前沿")
-        ax.set_xlabel("Tmax (h)")
-        ax.set_ylabel("δ = Tmax - Tmin (h)")
-        ax.set_title(f"问题2 均衡代价权衡曲线（{sheet}，Tmax*={entry['Tmax_star_h']:.3f}h）")
-        ax.legend(fontsize=8)
-        ax.grid(alpha=0.3)
-        fig.tight_layout()
-        fig.savefig(os.path.join(FIG_Q2, f"q2_tradeoff_{sheet}.png"), dpi=150)
-        plt.close(fig)
-    print("图9 完成：q2_tradeoff_*.png")
-
-
 def main():
-    os.makedirs(FIG_Q1, exist_ok=True)
-    os.makedirs(FIG_Q2, exist_ok=True)
-    os.makedirs(FIG_Q3, exist_ok=True)
+    os.makedirs(FIG_DIR, exist_ok=True)
     args = sys.argv[1:]
     sheets = args if args else CASES
     plot_q1_routes(sheets)
-    plot_q1_routes_gradient(sheets)
     plot_q1_lowerbound()
     plot_q2_balance(sheets)
-    plot_q2_tradeoff(sheets)
     plot_q3_spacetime(sheets)
-    plot_q3_snapshots(sheets)
     plot_q3_timeline(sheets)
     plot_summary()
-    plot_summary_heatmap()
     print(f"全部图片已输出到 {FIG_DIR}")
 
 
