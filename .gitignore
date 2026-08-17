@@ -1,6 +1,7 @@
 # Python 虚拟环境与缓存
 .venv/
 venv/
+.vendor/
 __pycache__/
 *.pyc
 *.pyo

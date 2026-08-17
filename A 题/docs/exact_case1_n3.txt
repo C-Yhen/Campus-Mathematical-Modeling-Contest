@@ -1,0 +1,83 @@
+Running HiGHS 1.12.0 (git hash: 4f96ee8): Copyright (c) 2025 HiGHS under MIT licence terms
+MIP has 9114 rows; 16539 cols; 163907 nonzeros; 8268 integer variables (7638 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 2e+04]
+  Cost    [0e+00, 0e+00]
+  Bound   [1e+00, 1e+02]
+  RHS     [1e+00, 3e+04]
+Presolving model
+9114 rows, 16539 cols, 163907 nonzeros  0s
+9114 rows, 16539 cols, 151002 nonzeros  0s
+Presolve reductions: rows 9114(-0); columns 16539(-0); nonzeros 151002(-12905) 
+Objective function is integral with scale 1
+
+Solving MIP model with:
+   9114 rows
+   16539 cols (7638 binary, 630 integer, 3 implied int., 8268 continuous, 0 domain fixed)
+   151002 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     1.2s
+         0       0         0   0.00%   0               inf                  inf        0      0      2      3972     2.5s
+         0       0         0   0.00%   0               inf                  inf     5988    453     68      5765     7.7s
+         0       0         0   0.00%   0               inf                  inf    10302    642    113      7400    13.0s
+         0       0         0   0.00%   0               inf                  inf     9159    359    200    105772    53.2s
+        10       0         1   0.20%   0               inf                  inf     9160    359    229    119169    58.6s
+        20       0         5   0.28%   0               inf                  inf     9164    359    292    137752    65.6s
+        30       0         8   0.29%   0               inf                  inf     9167    359    336    152107    70.9s
+        39       0        12   0.29%   0               inf                  inf     9171    359    360    166933    76.2s
+        47       0        17   0.29%   0               inf                  inf     9176    359    400    184588    82.5s
+        58       0        21   0.29%   0               inf                  inf     9180    359    556    198913    87.9s
+        65       0        25   0.29%   0               inf                  inf     9184    359    716    215589    93.7s
+        73       0        30   0.29%   0               inf                  inf     9189    359    877    233652   100.0s
+        81       0        34   0.29%   0               inf                  inf     9193    359    956    250080   105.9s
+        90       0        37   0.29%   0               inf                  inf     9196    359   1010    264007   110.9s
+       101      16        43   0.29%   0               inf                  inf     9202    359   1043    278393   116.2s
+       103      14        45   0.29%   0               inf                  inf     9204    359   1052    294294   122.4s
+       105      12        47   0.29%   0               inf                  inf     9206    359   1057    310651   128.8s
+       109      10        49   0.29%   0               inf                  inf     9395    416   1074    452160   170.9s
+       116      10        52   0.29%   0               inf                  inf     9398    416   1090    466349   176.3s
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+       122      10        55   0.29%   0               inf                  inf     9401    416   1106    481060   182.0s
+       129      10        59   0.29%   0               inf                  inf     9405    416   1117    496451   188.4s
+       136      10        62   0.29%   0               inf                  inf     9408    416   1134    511178   194.2s
+       142      10        65   0.29%   0               inf                  inf     9411    416   1151    526116   199.9s
+       147      10        68   0.29%   0               inf                  inf     9414    416   1160    545487   207.5s
+       151      10        70   0.29%   0               inf                  inf     9416    416   1166    560446   213.4s
+       157      10        73   0.29%   0               inf                  inf     9419    416   1172    575210   219.4s
+       162       9        77   0.29%   0               inf                  inf     9423    416   1177    591094   225.7s
+       169       8        78   0.31%   0               inf                  inf     9752    476   1201    781143   282.9s
+       180       8        82   0.31%   0               inf                  inf     9756    476   1251    796387   289.2s
+       186       8        85   0.31%   0               inf                  inf     9759    476   1294    809823   294.7s
+       196      16        91   0.31%   0               inf                  inf     9762    476   1368    822355   300.0s
+       196      16        91   0.31%   0               inf                  inf     9762    476   1368    822355   300.0s
+
+Solving report
+  Status            Time limit reached
+  Primal bound      inf
+  Dual bound        0
+  Gap               inf
+  P-D integral      0
+  Solution status   -
+  Timing            300.01
+  Max sub-MIP depth 5
+  Nodes             196
+  Repair LPs        0
+  LP iterations     822355
+                    0 (strong br.)
+                    5333 (separation)
+                    401767 (heuristics)
+
+求解整数循环覆盖松弛: Case1, N=3, visits=72, mode=9h-feasibility
+MipCertificate(case='Case1', n_uav=3, exact=True, status=1, message='Time limit reached. (HiGHS Status 13: model_status is Time limit reached; primal_status is None)', feasible_under_9h=None, objective_h=None, dual_bound_h=None, mip_gap=None, node_count=None)
+未在给定时间内形成 9 h 可行性结论，请延长时间或查看 dual bound。

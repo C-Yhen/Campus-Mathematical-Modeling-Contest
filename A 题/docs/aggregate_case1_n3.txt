@@ -1,0 +1,94 @@
+Running HiGHS 1.12.0 (git hash: 4f96ee8): Copyright (c) 2025 HiGHS under MIT licence terms
+MIP has 2914 rows; 5512 cols; 19136 nonzeros; 2756 integer variables (2516 binary)
+Coefficient ranges:
+  Matrix  [1e+00, 7e+01]
+  Cost    [3e-02, 3e+00]
+  Bound   [1e+00, 7e+01]
+  RHS     [1e+00, 3e+00]
+Presolving model
+2914 rows, 5512 cols, 19136 nonzeros  0s
+2914 rows, 5512 cols, 16432 nonzeros  0s
+Presolve reductions: rows 2914(-0); columns 5512(-0); nonzeros 16432(-2704) 
+
+Solving MIP model with:
+   2914 rows
+   5512 cols (2516 binary, 240 integer, 0 implied int., 2756 continuous, 0 domain fixed)
+   16432 nonzeros
+
+Src: B => Branching; C => Central rounding; F => Feasibility pump; H => Heuristic;
+     I => Shifting; J => Feasibility jump; L => Sub-MIP; P => Empty MIP; R => Randomized rounding;
+     S => Solve LP; T => Evaluate node; U => Unbounded; X => User solution; Y => HiGHS solution;
+     Z => ZI Round; l => Trivial lower; p => Trivial point; u => Trivial upper; z => Trivial zero
+
+        Nodes      |    B&B Tree     |            Objective Bounds              |  Dynamic Constraints |       Work      
+Src  Proc. InQueue |  Leaves   Expl. | BestBound       BestSol              Gap |   Cuts   InLp Confl. | LpIters     Time
+
+         0       0         0   0.00%   0               inf                  inf        0      0      0         0     0.1s
+         0       0         0   0.00%   19.92516943     inf                  inf        0      0      0      1707     0.1s
+ R       0       0         0   0.00%   20.98918534     38.6306142        45.67%     4560    154     68      5720     2.2s
+ L       0       0         0   0.00%   20.99012544     21.18315328        0.91%     4593    158     68      5747     3.5s
+ L       0       0         0   0.00%   21.01356494     21.09018324        0.36%     4665    125     68     14344     3.6s
+
+91.1% inactive integer columns, restarting
+Model after restart has 316 rows, 416 cols (162 bin., 10 int., 0 impl., 244 cont., 0 dom.fix.), and 1493 nonzeros
+
+         0       0         0   0.00%   21.01527423     21.09018324        0.36%       78      0      0     15211     3.7s
+         0       0         0   0.00%   21.01527423     21.09018324        0.36%       78     56      4     15774     3.7s
+
+15.1% inactive integer columns, restarting
+Model after restart has 288 rows, 362 cols (135 bin., 9 int., 0 impl., 218 cont., 0 dom.fix.), and 1308 nonzeros
+
+         0       0         0   0.00%   21.02327845     21.09018324        0.32%       65      0      0     18567     4.0s
+         0       0         0   0.00%   21.02327845     21.09018324        0.32%       65     60      4     18914     4.0s
+
+9.7% inactive integer columns, restarting
+Model after restart has 272 rows, 332 cols (119 bin., 9 int., 0 impl., 204 cont., 0 dom.fix.), and 1213 nonzeros
+
+         0       0         0   0.00%   21.02961141     21.09018324        0.29%       69      0      0     19180     4.2s
+         0       0         0   0.00%   21.02961141     21.09018324        0.29%       69     54      3     19374     4.2s
+
+10.2% inactive integer columns, restarting
+Model after restart has 255 rows, 302 cols (105 bin., 6 int., 0 impl., 191 cont., 0 dom.fix.), and 1126 nonzeros
+
+         0       0         0   0.00%   21.03114657     21.09018324        0.28%       63      0      0     19565     4.3s
+         0       0         0   0.00%   21.03114657     21.09018324        0.28%       63     51      7     19734     4.3s
+
+3.6% inactive integer columns, restarting
+Model after restart has 249 rows, 293 cols (100 bin., 6 int., 0 impl., 187 cont., 0 dom.fix.), and 1098 nonzeros
+
+         0       0         0   0.00%   21.04455857     21.09018324        0.22%       72      0      0     19987     4.4s
+         0       0         0   0.00%   21.04455857     21.09018324        0.22%       72     55      4     20152     4.4s
+
+15.1% inactive integer columns, restarting
+Model after restart has 226 rows, 256 cols (84 bin., 3 int., 0 impl., 169 cont., 0 dom.fix.), and 964 nonzeros
+
+         0       0         0   0.00%   21.05213837     21.09018324        0.18%       62      0      0     20342     4.4s
+         0       0         0   0.00%   21.05213837     21.09018324        0.18%       62     50      4     20677     4.4s
+ B       0       0         0   0.00%   21.05638784     21.06434509        0.04%     1274     64     21     20912     4.5s
+         3       0         0 100.00%   21.06434509     21.06434509        0.00%     1275     64     21     22442     4.5s
+
+Solving report
+  Status            Optimal
+  Primal bound      21.0643450909
+  Dual bound        21.0643450909
+  Gap               0%
+  P-D integral      0.564741131461
+  Solution status   feasible
+                    21.0643450909 (objective)
+                    0 (bound viol.)
+                    0 (int. viol.)
+                    0 (row viol.)
+  Timing            4.54
+  Max sub-MIP depth 6
+  Nodes             3
+  Repair LPs        0
+  LP iterations     22442
+                    1395 (strong br.)
+                    5524 (separation)
+                    11908 (heuristics)
+
+求解聚合连通最小总工时: Case1, N=3, visits=72
+TotalTimeCertificate(case='Case1', n_uav=3, status=0, message='Optimization terminated successfully. (HiGHS Status 7: Optimal)', incumbent_h=27.064345090929862, dual_bound_h=27.064345090929862, excluded_by_bound=True, mip_gap=0.0, node_count=3, best_route_hours=(np.float64(25.37754659498635), np.float64(0.7621753225185869), np.float64(0.924623173424917)), best_routes=((0, 30, 23, 21, 17, 3, 18, 22, 1, 22, 1, 49, 32, 45, 19, 45, 41, 8, 9, 10, 43, 33, 51, 12, 51, 11, 52, 14, 13, 47, 26, 28, 27, 28, 27, 28, 25, 4, 43, 4, 43, 15, 5, 15, 6, 15, 24, 48, 38, 40, 39, 34, 35, 36, 39, 37, 46, 44, 46, 16, 50, 20, 50, 29, 50, 23, 21, 31, 21, 42, 7, 0), (0, 2, 0), (0, 7, 0)))
+严格证书：总工时全局下界 27.064345 h > 27.000000 h，因此 N=3 不可行。
+欧拉分解路线工时(h): (np.float64(25.377547), np.float64(0.762175), np.float64(0.924623))
+欧拉分解最大工时(h): 25.377547
