@@ -46,7 +46,7 @@ DATA2 = os.path.join(BASE_DIR, "附件2.xlsx")
 SUMMARY = os.path.join(BASE_DIR, "docs", "q2_q3_summary.txt")
 EPS = 1e-7
 INF = 1e100
-RELAX_TOL = 0.01  # 问题 2 第二层的 Tmax 容差: 上限 = Tmax* * (1 + RELAX_TOL)
+RELAX_TOL = 0.0  # 正式问题 2 采用 ε=0 主口径；非零容差仅用于权衡/敏感性分析
 
 
 @dataclass(frozen=True)

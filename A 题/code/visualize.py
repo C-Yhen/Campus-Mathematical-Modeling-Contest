@@ -1,16 +1,18 @@
 # -*- coding: utf-8 -*-
 """A 题三问可视化脚本（只读结果文件，不修改求解器）。
-
-生成图片清单（输出到 A 题/figures/）：
-  1. q1_routes_{case}.png     问题1 各算例的无人机巡检路线图
-  2. q1_lowerbound.png        问题1 循环覆盖下界 vs 9h 论证图（4 算例）
-  3. q2_balance_{case}.png    问题2 各机时长均衡对比（Q1 vs Q2 + 容差带）
-  4. q3_spacetime_{case}.png  问题3 时空轨迹图（禁飞区 + 路径 + 等待/绕行）
-  5. q3_timeline_{case}.png   问题3 时间轴（飞行/服务/等待 + 禁飞窗带）
-  6. summary.png              三问 Tmax / delta 汇总对比
+输出目录: A 题/figures/
+  1. q1_routes_{case}.png             问题1 路径方案图（按无人机着色）
+  2. q1_routes_gradient_{case}.png    问题1 路径方案图（按访问次序渐变）
+  3. q1_lowerbound.png                机数下界对比
+  4. q2_balance_{case}.png            问题2 各机时长均衡对比（Q1 vs Q2）
+  5. q2_tradeoff_{case}.png           问题2 Tmax-δ 权衡/敏感性曲线
+  6. q3_spacetime_{case}.png          问题3 时空轨迹图（禁飞区 + 路径 + 等待/绕行）
+  7. q3_timeline_{case}.png           问题3 甘特图（飞行/服务/等待分解）
+  8. summary.png                      三问核心指标总览
 
 用法：python visualize.py [case]   # 不给参数则生成全部
 """
+import json
 import math
 import os
 import sys
@@ -29,6 +31,7 @@ from solve_q2_q3 import (
 from audit_q2_q3 import _timed_leg_trace
 
 FIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "figures")
+TRADEOFF_DATA = os.path.join(FIG_DIR, "q2", "q2_tradeoff_data.json")
 plt.rcParams["font.sans-serif"] = ["Microsoft YaHei", "SimHei"]
 plt.rcParams["axes.unicode_minus"] = False
 
@@ -112,6 +115,57 @@ def plot_q1_routes(sheets=CASES):
     print("图1 完成：q1_routes_*.png")
 
 
+def plot_q1_routes_gradient(sheets=CASES):
+    """按各无人机的访问次序渐变着色，突出路线方向而非无人机编号。"""
+    cmap = plt.get_cmap("viridis")
+    for sheet in sheets:
+        coords, levels = _coords_and_levels(sheet)
+        routes = load_routes(RESULT1, sheet)
+        fig, ax = plt.subplots(figsize=(6.8, 6.4))
+
+        for lvl, (marker, _) in LVL_STYLE.items():
+            ids = [pid for pid, value in levels.items() if value == lvl]
+            if ids:
+                ax.scatter(
+                    [coords[pid][0] for pid in ids],
+                    [coords[pid][1] for pid in ids],
+                    marker=marker, s=18, c="#d9d9d9", edgecolors="#636363",
+                    linewidths=0.35, alpha=0.75, zorder=2,
+                )
+
+        for route in routes:
+            path = [(0.0, 0.0)] + [coords[pid] for pid in route] + [(0.0, 0.0)]
+            denominator = max(1, len(path) - 2)
+            for step, (start, end) in enumerate(zip(path, path[1:])):
+                ax.annotate(
+                    "", xy=end, xytext=start,
+                    arrowprops=dict(
+                        arrowstyle="->", lw=1.35, color=cmap(step / denominator),
+                        alpha=0.80, shrinkA=0, shrinkB=0,
+                    ),
+                    zorder=3,
+                )
+
+        ax.scatter([0], [0], marker="*", s=260, c="black", zorder=5, label="基地")
+        scalar = matplotlib.cm.ScalarMappable(
+            norm=matplotlib.colors.Normalize(vmin=0.0, vmax=1.0), cmap=cmap
+        )
+        scalar.set_array([])
+        colorbar = fig.colorbar(scalar, ax=ax, fraction=0.040, pad=0.025)
+        colorbar.set_label("该机路径进度（归一化）")
+        ax.set_title(f"问题1 路径访问次序渐变（{sheet}，N={len(routes)}）")
+        ax.set_xlabel("x（坐标单位，1单位=100m）")
+        ax.set_ylabel("y（坐标单位）")
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.grid(alpha=0.25)
+        fig.tight_layout()
+        out = os.path.join(FIG_DIR, "q1", f"q1_routes_gradient_{sheet}.png")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        fig.savefig(out, dpi=150)
+        plt.close(fig)
+    print("图1b 完成：q1_routes_gradient_*.png")
+
+
 # ---------------------------- 图2：Q1 下界论证 ----------------------------
 def plot_q1_lowerbound():
     bounds_path = os.path.join(os.path.dirname(FIG_DIR), "docs", "cycle_cover_bounds.txt")
@@ -163,8 +217,7 @@ def plot_q2_balance(sheets=CASES):
         ax.bar([i + w / 2 for i in x], t2, w, color="#1f77b4", label="问题2 方案")
         tmax_star = max(t1)
         ax.axhline(tmax_star, color="gray", linestyle="--", linewidth=1.0)
-        ax.axhspan(tmax_star, tmax_star * 1.01, color="#ffd92f", alpha=0.30)
-        ax.text(n - 0.45, tmax_star * 1.008, "Tmax* 容差带 (+1%)", fontsize=8, va="bottom")
+        ax.text(n - 0.45, tmax_star, "Tmax*（ε=0 上限）", fontsize=8, va="bottom")
         ax.set_xticks(x)
         ax.set_xticklabels([f"UAV{i+1}" for i in x])
         ax.set_ylabel("工作时长 (h)")
@@ -178,6 +231,58 @@ def plot_q2_balance(sheets=CASES):
         fig.savefig(out, dpi=150)
         plt.close(fig)
     print("图3 完成：q2_balance_*.png")
+
+
+def plot_q2_tradeoff(sheets=CASES):
+    """由预先求解并保存的 JSON 数据重绘问题2 ε-约束权衡曲线。"""
+    if not os.path.exists(TRADEOFF_DATA):
+        print(f"问题2权衡图跳过：未找到 {TRADEOFF_DATA}")
+        return
+    with open(TRADEOFF_DATA, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    for sheet in sheets:
+        points = data[sheet]["points"]
+        relax_pct = [100.0 * float(point["relax"]) for point in points]
+        delta_min = [60.0 * float(point["delta_h"]) for point in points]
+        tmax_h = [float(point["Tmax_h"]) for point in points]
+        cap_h = [float(point["cap_h"]) for point in points]
+
+        fig, ax_delta = plt.subplots(figsize=(7.4, 4.2))
+        ax_delta.plot(
+            relax_pct, delta_min, "o-", color="#1b9e77", linewidth=2.0,
+            markersize=5.5, label=r"均衡极差 $\delta$",
+        )
+        ax_delta.set_xlabel(r"最大时长允许松弛 $\epsilon$（%）")
+        ax_delta.set_ylabel(r"时长极差 $\delta$（min）", color="#1b9e77")
+        ax_delta.tick_params(axis="y", labelcolor="#1b9e77")
+        ax_delta.grid(alpha=0.25)
+
+        ax_time = ax_delta.twinx()
+        ax_time.plot(
+            relax_pct, tmax_h, "s--", color="#d95f02", linewidth=1.7,
+            markersize=5.0, label=r"所得 $T_{max}$",
+        )
+        ax_time.plot(
+            relax_pct, cap_h, ":", color="#7570b3", linewidth=1.7,
+            label=r"约束上限 $T_{max}^{*}(1+\epsilon)$",
+        )
+        ax_time.set_ylabel(r"最大单机时长 $T_{max}$（h）", color="#d95f02")
+        ax_time.tick_params(axis="y", labelcolor="#d95f02")
+
+        lines1, labels1 = ax_delta.get_legend_handles_labels()
+        lines2, labels2 = ax_time.get_legend_handles_labels()
+        ax_delta.legend(lines1 + lines2, labels1 + labels2, fontsize=8, loc="best")
+        ax_delta.set_title(f"问题2 ε-约束权衡（{sheet}）")
+        ax_delta.text(0.01, 0.02, "多种子热启动启发式所得可行值，不构成全局最优证明",
+                      transform=ax_delta.transAxes, fontsize=7,
+                      color="#555555", va="bottom")
+        fig.tight_layout()
+        out = os.path.join(FIG_DIR, "q2", f"q2_tradeoff_{sheet}.png")
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        fig.savefig(out, dpi=150)
+        plt.close(fig)
+    print("图3b 完成：q2_tradeoff_*.png")
 
 
 # ---------------------------- 图4：Q3 时空轨迹 ----------------------------
@@ -297,7 +402,7 @@ def plot_summary():
         t2 = [static_metric(r, coords).total / 3600 for r in r2]
         t3 = [dynamic_metric(r, coords, zones).total / 3600 for r in r3]
         rows.append((sheet, len(r1), max(t1), max(t1) - min(t1),
-                     max(t2) - min(t2), max(t3), max(t3) - min(t3)))
+                     max(t2), max(t2) - min(t2), max(t3), max(t3) - min(t3)))
     fig, axes = plt.subplots(1, 2, figsize=(10.5, 3.4))
     x = list(range(4))
     for ax, idx, ylabel, title in (
@@ -308,8 +413,8 @@ def plot_summary():
     ax = axes[0]
     w = 0.26
     ax.bar([i - w for i in x], [r[2] for r in rows], w, color="#9ecae1", label="问题1")
-    ax.bar([i for i in x], [r[2] for r in rows], w, color="#1f77b4", label="问题2")
-    ax.bar([i + w for i in x], [r[5] for r in rows], w, color="#d62728", label="问题3")
+    ax.bar([i for i in x], [r[4] for r in rows], w, color="#1f77b4", label="问题2")
+    ax.bar([i + w for i in x], [r[6] for r in rows], w, color="#d62728", label="问题3")
     ax.axhline(9, color="k", linestyle="--", linewidth=1)
     ax.set_xticks(x)
     ax.set_xticklabels([r[0] for r in rows])
@@ -318,8 +423,8 @@ def plot_summary():
     ax.grid(alpha=0.25, axis="y")
     # delta
     ax = axes[1]
-    ax.bar([i - w / 2 for i in x], [r[4] for r in rows], w, color="#1f77b4", label="问题2 δ")
-    ax.bar([i + w / 2 for i in x], [r[6] for r in rows], w, color="#d62728", label="问题3 δ")
+    ax.bar([i - w / 2 for i in x], [r[5] for r in rows], w, color="#1f77b4", label="问题2 δ")
+    ax.bar([i + w / 2 for i in x], [r[7] for r in rows], w, color="#d62728", label="问题3 δ")
     ax.set_xticks(x)
     ax.set_xticklabels([r[0] for r in rows])
     ax.set_ylabel("δ (h)")
@@ -337,8 +442,10 @@ def main():
     args = sys.argv[1:]
     sheets = args if args else CASES
     plot_q1_routes(sheets)
+    plot_q1_routes_gradient(sheets)
     plot_q1_lowerbound()
     plot_q2_balance(sheets)
+    plot_q2_tradeoff(sheets)
     plot_q3_spacetime(sheets)
     plot_q3_timeline(sheets)
     plot_summary()

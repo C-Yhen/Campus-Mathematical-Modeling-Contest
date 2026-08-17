@@ -19,18 +19,18 @@ A题问题2、3独立审计
 判据：覆盖次数精确；同点不连续；逐段飞行/等待/服务均不与生效圆区内部相交。
 等待位置按入界点外侧极限解释；切线绕飞使用外扩1坐标单位的安全圆。
 
-Case1 Q2: N=4, visits=72, Tmax=8.925973h, Tmin=8.883563h, delta=0.042411h, coverage=PASS, status=PASS
+Case1 Q2: N=4, visits=72, Tmax=8.925973h, Tmin=8.921839h, delta=0.004135h, coverage=PASS, status=PASS
 Case1 Q3: N=4, visits=72, Tmax=8.925973h, Tmin=8.921839h, delta=0.004135h, coverage=PASS, status=PASS
-  flight=29.697539h, service=6.000000h, wait=0.000000h, detour_legs=0, wait_events=0
-Case2 Q2: N=2, visits=139, Tmax=7.636653h, Tmin=7.626648h, delta=0.010005h, coverage=PASS, status=PASS
-Case2 Q3: N=2, visits=139, Tmax=11.329129h, Tmin=11.328327h, delta=0.000802h, coverage=PASS, status=PASS
-  flight=7.190044h, service=11.583333h, wait=3.884078h, detour_legs=5, wait_events=4
-Case3 Q2: N=5, visits=140, Tmax=8.715557h, Tmin=8.689821h, delta=0.025736h, coverage=PASS, status=PASS
-Case3 Q3: N=5, visits=140, Tmax=9.199556h, Tmin=9.006742h, delta=0.192814h, coverage=PASS, status=PASS
-  flight=33.908314h, service=11.666667h, wait=0.000000h, detour_legs=1, wait_events=0
-Case4 Q2: N=4, visits=182, Tmax=8.959070h, Tmin=8.900889h, delta=0.058181h, coverage=PASS, status=PASS
-Case4 Q3: N=4, visits=182, Tmax=9.987548h, Tmin=9.941512h, delta=0.046035h, coverage=PASS, status=PASS
-  flight=24.669007h, service=15.166667h, wait=0.000000h, detour_legs=0, wait_events=0
+  flight=29.695118h, service=6.000000h, wait=0.000000h, detour_legs=0, wait_events=0
+Case2 Q2: N=2, visits=139, Tmax=7.636653h, Tmin=7.633259h, delta=0.003394h, coverage=PASS, status=PASS
+Case2 Q3: N=2, visits=139, Tmax=11.069161h, Tmin=10.976426h, delta=0.092734h, coverage=PASS, status=PASS
+  flight=7.179037h, service=11.583333h, wait=3.283217h, detour_legs=4, wait_events=3
+Case3 Q2: N=5, visits=140, Tmax=8.715557h, Tmin=8.703879h, delta=0.011679h, coverage=PASS, status=PASS
+Case3 Q3: N=5, visits=140, Tmax=9.127126h, Tmin=9.080373h, delta=0.046754h, coverage=PASS, status=PASS
+  flight=33.861625h, service=11.666667h, wait=0.000000h, detour_legs=1, wait_events=0
+Case4 Q2: N=4, visits=182, Tmax=8.959070h, Tmin=8.927368h, delta=0.031702h, coverage=PASS, status=PASS
+Case4 Q3: N=4, visits=182, Tmax=9.900550h, Tmin=9.863064h, delta=0.037486h, coverage=PASS, status=PASS
+  flight=24.379484h, service=15.166667h, wait=0.000000h, detour_legs=0, wait_events=0
 
 OVERALL: PASS
 
