@@ -8,7 +8,7 @@
 进行连续时间事件仿真，并在“入界前等待”和“沿圆外切线—安全圆弧绕飞”
 之间选较早到达者。
 
-算法是多起点模拟退火/变邻域搜索，任务副本始终只移动、不增删，因此覆盖次数
+算法是多起点遗传算法/变邻域搜索，任务副本始终只移动、不增删，因此覆盖次数
 保持不变；相邻同一物理点的方案被判为非法。输出 result2.xlsx、result3.xlsx，
 并生成 docs/q2_q3_summary.txt 供独立核验。
 
@@ -349,25 +349,30 @@ def objective(times: Sequence[float], balance_weight: float) -> float:
     return max(times) + balance_weight * (max(times) - min(times))
 
 
-def hierarchical_objective(times: Sequence[float], tmax_cap: float,
-                           relax: float = 0.0) -> float:
-    """分层目标（问题 2 第二层）：
-    第一层：Tmax 不得超过上限 cap = tmax_cap * (1 + relax)，越界部分乘大罚系数；
-    第二层：可行域内最小化工作负载极差 delta = Tmax - Tmin。
-    """
-    if not times or max(times) >= INF / 2:
-        return INF
-    mx, mn = max(times), min(times)
-    cap = tmax_cap * (1.0 + relax)
-    over = max(0.0, mx - cap)
-    return over * 1e6 + (mx - mn)
-
-
 def lex_key(times: Sequence[float]) -> tuple[float, float, float]:
     """保存最优解时采用严格词典序，再以方差作第三判据。"""
     mx, mn = max(times), min(times)
     mean = sum(times) / len(times)
     return mx, mx - mn, sum((x - mean) ** 2 for x in times)
+
+
+def hierarchical_key(times: Sequence[float], tmax_cap: float,
+                     relax: float = 0.0) -> tuple[float, float, float, float]:
+    """与问题 2 的 ε-约束目标一致的严格比较键。
+
+    可行解（Tmax 不超过容差上限）一定优于越界解；可行域内依次最小化
+    极差、Tmax 和方差。若当前种群尚无可行解，则优先缩小越界量。
+    """
+    if not times or max(times) >= INF / 2:
+        return 2.0, INF, INF, INF
+    mx, mn = max(times), min(times)
+    spread = mx - mn
+    mean = sum(times) / len(times)
+    variance = sum((x - mean) ** 2 for x in times)
+    over = max(0.0, mx - tmax_cap * (1.0 + relax))
+    if over <= EPS:
+        return 0.0, spread, mx, variance
+    return 1.0, over, spread, variance
 
 
 def best_cyclic_route(route: Sequence[int],
@@ -464,10 +469,11 @@ def mutate(routes: list[list[int]], rng: random.Random) -> tuple[list[list[int]]
 
 
 def rebalance_relocate(routes: list[list[int]],
-                       metric: Callable[[Sequence[int]], RouteMetric]
+                       metric: Callable[[Sequence[int]], RouteMetric],
+                       key_fn: Callable[[Sequence[float]], tuple[float, ...]] = lex_key,
                        ) -> tuple[list[list[int]], set[int]]:
     """显式均衡算子：从最忙路径搬一个点插入最闲路径的最佳位置。
-    以 (Tmax, delta) 词典序接受改进（不增 Tmax 且极差下降）。
+    按调用方的目标键接受改进；问题 2 使用 ε-约束键。
     """
     times = [metric(r).total for r in routes]
     jmax = int(max(range(len(routes)), key=lambda i: times[i]))
@@ -475,7 +481,7 @@ def rebalance_relocate(routes: list[list[int]],
     if jmax == jmin or len(routes[jmax]) <= 1:
         return routes, {jmax, jmin}
     cand = [r[:] for r in routes]
-    best_key = lex_key(times)
+    best_key = key_fn(times)
     best_move: tuple[int, int] | None = None
     for i in range(len(cand[jmax])):
         value = cand[jmax][i]
@@ -488,7 +494,7 @@ def rebalance_relocate(routes: list[list[int]],
             t_times = times[:]
             t_times[jmax] = metric(trial[jmax]).total
             t_times[jmin] = metric(trial[jmin]).total
-            key = lex_key(t_times)
+            key = key_fn(t_times)
             if key < best_key:
                 best_key = key
                 best_move = (i, pos)
@@ -568,17 +574,22 @@ def _crossover(parent_a: Sequence[Sequence[int]], parent_b: Sequence[Sequence[in
 
 def _run_ga(initial: Sequence[Sequence[int]],
             metric: Callable[[Sequence[int]], RouteMetric],
-            score_fn: Callable[[Sequence[float]], float],
+            score_fn: Callable[[Sequence[float]], float | tuple[float, ...]],
             *, seed: int, pop_size: int, generations: int,
-            tmax_cap: float | None) -> tuple[list[list[int]], list[RouteMetric]]:
+            tmax_cap: float | None, relax: float = 0.0
+            ) -> tuple[list[list[int]], list[RouteMetric]]:
     """单次遗传算法运行：种群 + 锦标赛选择 + 路径继承交叉 + 变邻域变异 + 精英保留。"""
     rng = random.Random(seed)
-    n = len(initial)
     base = [list(r) for r in initial]
 
-    def evaluate(ind: Sequence[Sequence[int]]) -> tuple[float, list[float]]:
+    def evaluate(ind: Sequence[Sequence[int]]) -> tuple[float | tuple[float, ...], list[float]]:
         times = [metric(r).total for r in ind]
         return score_fn(times), times
+
+    def save_key(times: Sequence[float]) -> tuple[float, ...]:
+        if tmax_cap is None:
+            return lex_key(times)
+        return hierarchical_key(times, tmax_cap, relax)
 
     # 初始种群：1 个原方案 + 扰动个体
     population = [base]
@@ -590,15 +601,15 @@ def _run_ga(initial: Sequence[Sequence[int]],
                 ind = trial
         population.append(ind)
 
-    fits: list[float] = []
+    fits: list[float | tuple[float, ...]] = []
     all_times: list[list[float]] = []
     for ind in population:
         sc, times = evaluate(ind)
         fits.append(sc)
         all_times.append(times)
 
-    best_key = min(lex_key(t) for t in all_times)
-    best_i = min(range(pop_size), key=lambda i: lex_key(all_times[i]))
+    best_key = min(save_key(t) for t in all_times)
+    best_i = min(range(pop_size), key=lambda i: save_key(all_times[i]))
     best_routes = [r[:] for r in population[best_i]]
 
     elite_n = max(2, pop_size // 10)
@@ -619,19 +630,21 @@ def _run_ga(initial: Sequence[Sequence[int]],
             new_pop.append(child)
         # 分层模式：每 10 代对最优个体做一次显式均衡搬迁
         if tmax_cap is not None and gen % 10 == 9:
-            bi = min(range(pop_size), key=lambda i: fits[i])
-            trial, changed = rebalance_relocate(new_pop[bi], metric)
+            trial, changed = rebalance_relocate(
+                new_pop[0], metric,
+                lambda times: hierarchical_key(times, tmax_cap, relax),
+            )
             if all(valid_route(trial[k]) for k in changed):
-                new_pop[bi] = trial
+                new_pop[0] = trial
         population = new_pop
         fits, all_times = [], []
         for ind in population:
             sc, times = evaluate(ind)
             fits.append(sc)
             all_times.append(times)
-        for i, (sc, times) in enumerate(zip(fits, all_times)):
-            if sc < INF / 2:
-                key = lex_key(times)
+        for i, times in enumerate(all_times):
+            if max(times) < INF / 2:
+                key = save_key(times)
                 if key < best_key:
                     best_key = key
                     best_routes = [r[:] for r in population[i]]
@@ -649,29 +662,38 @@ def optimise(initial: Sequence[Sequence[int]], metric: Callable[[Sequence[int]],
     “最忙搬点给最闲”的显式均衡算子；否则退化为加权目标 objective。
     iterations 折算为进化代数：种群 48，代数 = max(60, iterations // 120)。
     """
-    def score_fn(times: Sequence[float]) -> float:
+    def score_fn(times: Sequence[float]) -> float | tuple[float, ...]:
         if tmax_cap is None:
             return objective(times, balance_weight)
-        return hierarchical_objective(times, tmax_cap, relax)
+        return hierarchical_key(times, tmax_cap, relax)
 
     pop_size = 48
     generations = max(60, iterations // 120)
     global_routes: list[list[int]] | None = None
-    global_key: tuple[float, float, float] | None = None
+    global_key: tuple[float, ...] | None = None
+
+    def save_key(times: Sequence[float]) -> tuple[float, ...]:
+        if tmax_cap is None:
+            return lex_key(times)
+        return hierarchical_key(times, tmax_cap, relax)
+
     for restart in range(restarts):
         routes, metrics = _run_ga(
             initial, metric, score_fn,
             seed=seed * 1009 + restart * 9176,
             pop_size=pop_size, generations=generations,
-            tmax_cap=tmax_cap,
+            tmax_cap=tmax_cap, relax=relax,
         )
-        key = lex_key([m.total for m in metrics])
+        times = [m.total for m in metrics]
+        key = save_key(times)
         if global_key is None or key < global_key:
             global_key = key
             global_routes = [r[:] for r in routes]
+        global_times = [metric(r).total for r in global_routes]
         print(
             f"    restart {restart + 1}/{restarts}: "
-            f"Tmax={global_key[0] / 3600:.4f}h, spread={global_key[1] / 3600:.4f}h"
+            f"Tmax={max(global_times) / 3600:.4f}h, "
+            f"spread={(max(global_times) - min(global_times)) / 3600:.4f}h"
         )
     assert global_routes is not None
     return global_routes, [metric(r) for r in global_routes]
@@ -725,7 +747,6 @@ def main() -> None:
     for idx, sheet in enumerate(("Case1", "Case2", "Case3", "Case4"), 1):
         points, _ = load_case(sheet)
         coords = {int(pid): (float(x), float(y)) for pid, x, y, _ in points}
-        initial = load_routes(RESULT1, sheet)
         initial = load_routes(RESULT1, sheet)
         print(f"[{sheet}] 问题2：分层优化（第一层 Tmax*，第二层上限内最小化 delta）")
         metric2 = lambda route, c=coords: static_metric(route, c)
