@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """A 题问题 2、3：负载均衡与分时圆形禁飞区下的多无人机调度。
 
-问题 2 固定问题 1 已采用的机队规模，以 (Tmax, Tmax-Tmin) 为词典序目标；
-问题 3 仍固定该机队规模，从 08:00 同时开始执行。对每条航段进行连续时间
-事件仿真，并在“入界前等待”和“沿圆外切线—安全圆弧绕飞”之间选较早到达者。
+问题 2 固定问题 1 已采用的机队规模，采用分层优化：第一层以问题 1 的
+最短总完成时间 Tmax* 为基准；第二层在 Tmax <= Tmax*(1+eps) 容差上限内
+最小化工作负载极差 delta=Tmax-Tmin，并显式使用“最忙路径搬点到最闲路径”
+的均衡算子。问题 3 仍固定该机队规模，从 08:00 同时开始执行。对每条航段
+进行连续时间事件仿真，并在“入界前等待”和“沿圆外切线—安全圆弧绕飞”
+之间选较早到达者。
 
 算法是多起点模拟退火/变邻域搜索，任务副本始终只移动、不增删，因此覆盖次数
 保持不变；相邻同一物理点的方案被判为非法。输出 result2.xlsx、result3.xlsx，
@@ -18,6 +21,7 @@ from __future__ import annotations
 import math
 import os
 import random
+from collections import Counter
 from dataclasses import dataclass
 from datetime import time as dt_time
 from functools import lru_cache
@@ -42,6 +46,7 @@ DATA2 = os.path.join(BASE_DIR, "附件2.xlsx")
 SUMMARY = os.path.join(BASE_DIR, "docs", "q2_q3_summary.txt")
 EPS = 1e-7
 INF = 1e100
+RELAX_TOL = 0.01  # 问题 2 第二层的 Tmax 容差: 上限 = Tmax* * (1 + RELAX_TOL)
 
 
 @dataclass(frozen=True)
@@ -159,7 +164,25 @@ def straight_timed_leg(start_time: float, a: tuple[float, float], b: tuple[float
             # 入界航段的“服务+下一段离界前视”提前推迟到解禁后。
             if u <= EPS:
                 return RouteMetric(INF, INF, INF, INF)
-            waiting += z.end - enter + EPS
+            # 等待点取入界点外侧：沿航段从入界点后退，直到该点不落入任何
+            # 生效禁飞圆内部（重叠圆区需要在共同外侧等待）。
+            u_wait = u
+            seg_len = max(math.dist(a, b), 1e-9)
+            for _ in range(10000):
+                pw = (a[0] + (b[0] - a[0]) * u_wait, a[1] + (b[1] - a[1]) * u_wait)
+                wait_start = start_time + waiting + u_wait * duration
+                safe = True
+                for z2 in zones:
+                    if (wait_start < z2.end - EPS and z.end > z2.start + EPS
+                            and math.dist(pw, (z2.x, z2.y)) < z2.radius - EPS):
+                        safe = False
+                        break
+                if safe:
+                    break
+                u_wait -= 1.0 / seg_len  # 每次后退 1 坐标单位 (100 m)
+                if u_wait <= EPS:
+                    return RouteMetric(INF, INF, INF, INF)
+            waiting += z.end - (start_time + waiting + u_wait * duration) + EPS
 
     return RouteMetric(
         total=duration + destination_service + waiting,
@@ -326,6 +349,20 @@ def objective(times: Sequence[float], balance_weight: float) -> float:
     return max(times) + balance_weight * (max(times) - min(times))
 
 
+def hierarchical_objective(times: Sequence[float], tmax_cap: float,
+                           relax: float = 0.0) -> float:
+    """分层目标（问题 2 第二层）：
+    第一层：Tmax 不得超过上限 cap = tmax_cap * (1 + relax)，越界部分乘大罚系数；
+    第二层：可行域内最小化工作负载极差 delta = Tmax - Tmin。
+    """
+    if not times or max(times) >= INF / 2:
+        return INF
+    mx, mn = max(times), min(times)
+    cap = tmax_cap * (1.0 + relax)
+    over = max(0.0, mx - cap)
+    return over * 1e6 + (mx - mn)
+
+
 def lex_key(times: Sequence[float]) -> tuple[float, float, float]:
     """保存最优解时采用严格词典序，再以方差作第三判据。"""
     mx, mn = max(times), min(times)
@@ -426,53 +463,218 @@ def mutate(routes: list[list[int]], rng: random.Random) -> tuple[list[list[int]]
     return candidate, changed
 
 
+def rebalance_relocate(routes: list[list[int]],
+                       metric: Callable[[Sequence[int]], RouteMetric]
+                       ) -> tuple[list[list[int]], set[int]]:
+    """显式均衡算子：从最忙路径搬一个点插入最闲路径的最佳位置。
+    以 (Tmax, delta) 词典序接受改进（不增 Tmax 且极差下降）。
+    """
+    times = [metric(r).total for r in routes]
+    jmax = int(max(range(len(routes)), key=lambda i: times[i]))
+    jmin = int(min(range(len(routes)), key=lambda i: times[i]))
+    if jmax == jmin or len(routes[jmax]) <= 1:
+        return routes, {jmax, jmin}
+    cand = [r[:] for r in routes]
+    best_key = lex_key(times)
+    best_move: tuple[int, int] | None = None
+    for i in range(len(cand[jmax])):
+        value = cand[jmax][i]
+        for pos in range(len(cand[jmin]) + 1):
+            trial = [r[:] for r in cand]
+            trial[jmax].pop(i)
+            trial[jmin].insert(pos, value)
+            if not valid_route(trial[jmax]) or not valid_route(trial[jmin]):
+                continue
+            t_times = times[:]
+            t_times[jmax] = metric(trial[jmax]).total
+            t_times[jmin] = metric(trial[jmin]).total
+            key = lex_key(t_times)
+            if key < best_key:
+                best_key = key
+                best_move = (i, pos)
+    if best_move is None:
+        return routes, {jmax, jmin}
+    i, pos = best_move
+    value = cand[jmax].pop(i)
+    cand[jmin].insert(pos, value)
+    return cand, {jmax, jmin}
+
+
+def _fix_adjacent(route: Sequence[int], rng: random.Random) -> list[int]:
+    """消除路径中相邻的重复点（连续停留只算一次巡检 -> 相邻重复非法）。"""
+    out: list[int] = []
+    pending: list[int] = []
+    last = None
+    for pid in route:
+        if pid != last:
+            out.append(pid)
+            last = pid
+        else:
+            pending.append(pid)
+    for pid in pending:
+        placed = False
+        for attempt in range(len(out) + 1):
+            pos = (attempt + rng.randrange(len(out) + 1)) % (len(out) + 1)
+            left = out[pos - 1] if pos > 0 else None
+            right = out[pos] if pos < len(out) else None
+            if left != pid and right != pid:
+                out.insert(pos, pid)
+                placed = True
+                break
+        if not placed:
+            out.append(pid)
+    return out
+
+
+def _crossover(parent_a: Sequence[Sequence[int]], parent_b: Sequence[Sequence[int]],
+               rng: random.Random) -> list[list[int]]:
+    """路径继承交叉：子代随机继承父代 A 的若干条路径，其余任务副本取自
+    父代 B（按预算过滤后）重新分配到空路径；保持任务副本总集合不变。"""
+    n = len(parent_a)
+    used: Counter[int] = Counter()
+    child: list[list[int] | None] = [None] * n
+    for k in range(n):
+        if rng.random() < 0.5:
+            child[k] = list(parent_a[k])
+            for pid in child[k]:
+                used[pid] += 1
+    pool = [pid for route in parent_b for pid in route]
+    need = Counter(pool)
+    for pid, count in used.items():
+        need[pid] -= count
+    take: list[int] = []
+    for pid in pool:
+        if need[pid] > 0:
+            take.append(pid)
+            need[pid] -= 1
+    empty = [k for k in range(n) if child[k] is None]
+    if empty:
+        if len(take) < len(empty):
+            # 继承过多导致剩余副本不足：放弃继承，全部重新分配
+            child = [None] * n
+            take = pool[:]
+            empty = list(range(n))
+        m = len(empty)
+        cuts = sorted(rng.sample(range(1, len(take)), m - 1)) if m > 1 else []
+        segments: list[list[int]] = []
+        prev = 0
+        for cut in cuts + [len(take)]:
+            segments.append(take[prev:cut])
+            prev = cut
+        for k, seg in zip(empty, segments):
+            child[k] = _fix_adjacent(seg, rng)
+    return [r for r in child if r is not None]
+
+
+def _run_ga(initial: Sequence[Sequence[int]],
+            metric: Callable[[Sequence[int]], RouteMetric],
+            score_fn: Callable[[Sequence[float]], float],
+            *, seed: int, pop_size: int, generations: int,
+            tmax_cap: float | None) -> tuple[list[list[int]], list[RouteMetric]]:
+    """单次遗传算法运行：种群 + 锦标赛选择 + 路径继承交叉 + 变邻域变异 + 精英保留。"""
+    rng = random.Random(seed)
+    n = len(initial)
+    base = [list(r) for r in initial]
+
+    def evaluate(ind: Sequence[Sequence[int]]) -> tuple[float, list[float]]:
+        times = [metric(r).total for r in ind]
+        return score_fn(times), times
+
+    # 初始种群：1 个原方案 + 扰动个体
+    population = [base]
+    for _ in range(pop_size - 1):
+        ind = [r[:] for r in base]
+        for _ in range(4 + rng.randrange(8)):
+            trial, changed = mutate(ind, rng)
+            if all(valid_route(trial[k]) for k in changed):
+                ind = trial
+        population.append(ind)
+
+    fits: list[float] = []
+    all_times: list[list[float]] = []
+    for ind in population:
+        sc, times = evaluate(ind)
+        fits.append(sc)
+        all_times.append(times)
+
+    best_key = min(lex_key(t) for t in all_times)
+    best_i = min(range(pop_size), key=lambda i: lex_key(all_times[i]))
+    best_routes = [r[:] for r in population[best_i]]
+
+    elite_n = max(2, pop_size // 10)
+    for gen in range(generations):
+        order = sorted(range(pop_size), key=lambda i: fits[i])
+        new_pop = [[r[:] for r in population[i]] for i in order[:elite_n]]
+        while len(new_pop) < pop_size:
+            cands = [rng.randrange(pop_size) for _ in range(3)]
+            p1 = population[min(cands, key=lambda i: fits[i])]
+            cands = [rng.randrange(pop_size) for _ in range(3)]
+            p2 = population[min(cands, key=lambda i: fits[i])]
+            if rng.random() < 0.65:
+                child = _crossover(p1, p2, rng)
+            else:
+                child = [r[:] for r in p1]
+                child, _ = mutate(child, rng)
+                child = [_fix_adjacent(r, rng) for r in child]
+            new_pop.append(child)
+        # 分层模式：每 10 代对最优个体做一次显式均衡搬迁
+        if tmax_cap is not None and gen % 10 == 9:
+            bi = min(range(pop_size), key=lambda i: fits[i])
+            trial, changed = rebalance_relocate(new_pop[bi], metric)
+            if all(valid_route(trial[k]) for k in changed):
+                new_pop[bi] = trial
+        population = new_pop
+        fits, all_times = [], []
+        for ind in population:
+            sc, times = evaluate(ind)
+            fits.append(sc)
+            all_times.append(times)
+        for i, (sc, times) in enumerate(zip(fits, all_times)):
+            if sc < INF / 2:
+                key = lex_key(times)
+                if key < best_key:
+                    best_key = key
+                    best_routes = [r[:] for r in population[i]]
+    return best_routes, [metric(r) for r in best_routes]
+
+
 def optimise(initial: Sequence[Sequence[int]], metric: Callable[[Sequence[int]], RouteMetric],
              *, seed: int, iterations: int, restarts: int,
-             balance_weight: float) -> tuple[list[list[int]], list[RouteMetric]]:
-    """多起点模拟退火；只重算发生变化的 1--2 条路径。"""
-    global_routes = [list(r) for r in initial]
-    global_metrics = [metric(r) for r in global_routes]
-    global_key = lex_key([m.total for m in global_metrics])
+             balance_weight: float,
+             tmax_cap: float | None = None, relax: float = 0.0
+             ) -> tuple[list[list[int]], list[RouteMetric]]:
+    """遗传算法 + 变邻域变异，多起点重启取词典序最优。
 
+    若给定 tmax_cap，则采用分层目标（上限内最小化极差），并周期性执行
+    “最忙搬点给最闲”的显式均衡算子；否则退化为加权目标 objective。
+    iterations 折算为进化代数：种群 48，代数 = max(60, iterations // 120)。
+    """
+    def score_fn(times: Sequence[float]) -> float:
+        if tmax_cap is None:
+            return objective(times, balance_weight)
+        return hierarchical_objective(times, tmax_cap, relax)
+
+    pop_size = 48
+    generations = max(60, iterations // 120)
+    global_routes: list[list[int]] | None = None
+    global_key: tuple[float, float, float] | None = None
     for restart in range(restarts):
-        rng = random.Random(seed * 1009 + restart * 9176)
-        routes = [r[:] for r in global_routes]
-        # 除首轮外进行若干扰动，以建立不同搜索盆地。
-        if restart:
-            for _ in range(8 + 2 * restart):
-                trial, changed = mutate(routes, rng)
-                if all(valid_route(trial[k]) for k in changed):
-                    routes = trial
-        metrics = [metric(r) for r in routes]
-        times = [m.total for m in metrics]
-        score = objective(times, balance_weight)
-        start_temp = max(30.0, 0.015 * max(x for x in times if x < INF / 2))
-
-        for it in range(iterations):
-            trial, changed = mutate(routes, rng)
-            if any(not valid_route(trial[k]) for k in changed):
-                continue
-            trial_metrics = metrics[:]
-            for k in changed:
-                trial_metrics[k] = metric(trial[k])
-            trial_times = [m.total for m in trial_metrics]
-            trial_score = objective(trial_times, balance_weight)
-            # 周期性回温比单调降温更适合跨路径离散重分配。
-            phase = (it % max(1, iterations // 4)) / max(1, iterations // 4)
-            temp = start_temp * (0.002 ** phase)
-            delta = trial_score - score
-            if delta <= 0.0 or (delta < 40.0 * temp and rng.random() < math.exp(-delta / temp)):
-                routes, metrics, times, score = trial, trial_metrics, trial_times, trial_score
-                key = lex_key(times)
-                if key < global_key:
-                    global_routes = [r[:] for r in routes]
-                    global_metrics = metrics[:]
-                    global_key = key
+        routes, metrics = _run_ga(
+            initial, metric, score_fn,
+            seed=seed * 1009 + restart * 9176,
+            pop_size=pop_size, generations=generations,
+            tmax_cap=tmax_cap,
+        )
+        key = lex_key([m.total for m in metrics])
+        if global_key is None or key < global_key:
+            global_key = key
+            global_routes = [r[:] for r in routes]
         print(
             f"    restart {restart + 1}/{restarts}: "
             f"Tmax={global_key[0] / 3600:.4f}h, spread={global_key[1] / 3600:.4f}h"
         )
-    return global_routes, global_metrics
+    assert global_routes is not None
+    return global_routes, [metric(r) for r in global_routes]
 
 
 def write_workbook(path: str, results: dict[str, list[list[int]]]) -> None:
@@ -524,12 +726,20 @@ def main() -> None:
         points, _ = load_case(sheet)
         coords = {int(pid): (float(x), float(y)) for pid, x, y, _ in points}
         initial = load_routes(RESULT1, sheet)
-        print(f"[{sheet}] 问题2：静态工期—均衡性词典序搜索")
+        initial = load_routes(RESULT1, sheet)
+        print(f"[{sheet}] 问题2：分层优化（第一层 Tmax*，第二层上限内最小化 delta）")
         metric2 = lambda route, c=coords: static_metric(route, c)
+        # 第一层：问题 1 已最小化总完成时间，Tmax* 即问题 1 方案的最长单机时长
+        tmax_star = max(metric2(r).total for r in initial)
+        # 第二层：在 Tmax <= Tmax*(1+RELAX_TOL) 容差内最小化 delta
         r2, m2 = optimise(
             initial, metric2, seed=20260816 + idx, iterations=30000,
             restarts=3, balance_weight=0.015,
+            tmax_cap=tmax_star, relax=RELAX_TOL,
         )
+        times2 = [m.total for m in m2]
+        print(f"    Tmax*={tmax_star/3600:.4f}h, 容差上限={tmax_star*(1+RELAX_TOL)/3600:.4f}h, "
+              f"结果 Tmax={max(times2)/3600:.4f}h, delta={(max(times2)-min(times2))/3600:.4f}h")
         q2_routes[sheet], q2_metrics[sheet] = r2, m2
 
         print(f"[{sheet}] 问题3：分时禁飞区事件仿真与重调度")
@@ -551,7 +761,7 @@ def main() -> None:
     write_workbook(RESULT3, q3_routes)
     os.makedirs(os.path.dirname(SUMMARY), exist_ok=True)
     with open(SUMMARY, "w", encoding="utf-8") as f:
-        f.write("问题2（固定问题1机队规模；主目标Tmax，次目标delta）\n")
+        f.write("问题2（固定问题1机队规模；分层优化：Tmax* 容差上限内最小化 delta）\n")
         for sheet in q2_routes:
             f.write(summary_line(sheet, q2_routes[sheet], q2_metrics[sheet]))
         f.write("\n问题3（08:00出发；等待直飞与圆外切线绕飞取较早到达）\n")

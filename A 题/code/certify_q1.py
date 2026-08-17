@@ -395,6 +395,7 @@ def solve_minmax_cycle_cover(
     connected: bool = False,
     strengthened: bool = True,
     mip_rel_gap: float = 0.0,
+    cap_s: float | None = None,
 ) -> MipCertificate:
     """求按无人机分解的整数循环覆盖松弛。
 
@@ -406,9 +407,10 @@ def solve_minmax_cycle_cover(
     且流只能沿已使用的弧传递。这保证每个有任务的连通分量均含基地。结合
     整数弧流守恒，可得到一条经过全部弧的欧拉闭合路线，模型因而是精确的。
 
-    feasibility_only=True 时直接加入每机 9 h 上限：若 HiGHS 返回 status=2
-    （已证明不可行），即可严格排除该 N。否则最小化松弛问题的 Tmax。
+    feasibility_only=True 时直接加入每机 cap 上限（默认 9 h，可用 cap_s 指定）：
+    若 HiGHS 返回 status=2（已证明不可行），即可严格排除该 N。否则最小化松弛问题的 Tmax。
     """
+    cap = TIME_LIMIT_S if cap_s is None else float(cap_s)
     p = case.point_count
     nodes = range(p + 1)
     arcs = [(i, j) for i in nodes for j in nodes if i != j]
@@ -461,13 +463,13 @@ def solve_minmax_cycle_cover(
         # 9 h 内至多完成 floor(9h/5min)=108 次巡检；用它替代全局 140
         # 作为流容量，可在不改变整数可行域的前提下明显收紧 LP 松弛。
         max_route_visits = (
-            int(TIME_LIMIT_S // SERVICE_S) if feasibility_only else case.visit_count
+            int(cap // SERVICE_S) if feasibility_only else case.visit_count
         )
         upper[f_start : f_start + f_count] = max_route_visits
 
     if q_start is not None:
         upper[q_start : q_start + q_count] = (
-            int(TIME_LIMIT_S // SERVICE_S) if feasibility_only else case.visit_count
+            int(cap // SERVICE_S) if feasibility_only else case.visit_count
         )
 
     if t_index is not None:
@@ -508,7 +510,7 @@ def solve_minmax_cycle_cover(
         def f_index(k: int, i: int, j: int) -> int:
             return f_start + k * a_count + arc_pos[(i, j)]
 
-        big_m = int(TIME_LIMIT_S // SERVICE_S) if feasibility_only else case.visit_count
+        big_m = int(cap // SERVICE_S) if feasibility_only else case.visit_count
         for k in range(n_uav):
             for i, j in arcs:
                 rows.add(
@@ -554,7 +556,7 @@ def solve_minmax_cycle_cover(
                     if i != j
                 )
                 if feasibility_only:
-                    rows.add(terms, -np.inf, TIME_LIMIT_S)
+                    rows.add(terms, -np.inf, cap)
                 else:
                     rows.add(terms + [(t_index, -1.0)], -np.inf, 0.0)
 
@@ -595,7 +597,7 @@ def solve_minmax_cycle_cover(
         ]
         time_terms_by_uav.append(terms)
         if feasibility_only:
-            rows.add(terms, -np.inf, TIME_LIMIT_S)
+            rows.add(terms, -np.inf, cap)
         else:
             rows.add(terms + [(t_index, -1.0)], -np.inf, 0.0)
 
@@ -682,6 +684,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--exact", action="store_true", help="加入单商品流连通约束，求精确路径可行性模型")
     parser.add_argument("--optimize", action="store_true", help="最小化松弛 Tmax，而非仅验证 9 h 可行性")
     parser.add_argument("--time-limit", type=float, default=600.0, help="HiGHS 时间上限（秒）")
+    parser.add_argument("--cap", type=float, default=None, help="单机工作时长上限（小时），默认 9")
     parser.add_argument("--mip-gap", type=float, default=0.0, help="允许的相对 MIP gap")
     return parser.parse_args()
 
@@ -728,6 +731,7 @@ def main() -> None:
             feasibility_only=not args.optimize,
             connected=args.exact,
             mip_rel_gap=args.mip_gap,
+            cap_s=None if args.cap is None else args.cap * 3600.0,
         )
         print(cert)
         if cert.feasible_under_9h is False:

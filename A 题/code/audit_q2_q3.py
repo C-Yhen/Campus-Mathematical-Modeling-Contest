@@ -106,16 +106,34 @@ def _straight_trace(
         if enter < z.end - EPS and leave > z.start + EPS:
             if u <= EPS:
                 return RouteMetric(float("inf"), float("inf"), float("inf"), float("inf")), []
-            if u > last_u + EPS:
+            # 与求解器一致：等待点从入界点后退到所有生效圆之外
+            u_wait = u
+            seg_len = max(math.dist(a, b), 1e-9)
+            for _ in range(10000):
+                pw = (a[0] + (b[0] - a[0]) * u_wait, a[1] + (b[1] - a[1]) * u_wait)
+                wait_start = start_time + waiting + u_wait * duration
+                safe = True
+                for z2 in zones:
+                    if (wait_start < z2.end - EPS and z.end > z2.start + EPS
+                            and math.dist(pw, (z2.x, z2.y)) < z2.radius - EPS):
+                        safe = False
+                        break
+                if safe:
+                    break
+                u_wait -= 1.0 / seg_len
+                if u_wait <= EPS:
+                    return RouteMetric(float("inf"), float("inf"), float("inf"), float("inf")), []
+            enter_w = start_time + waiting + u_wait * duration
+            if u_wait > last_u + EPS:
                 p0 = (a[0] + (b[0] - a[0]) * last_u, a[1] + (b[1] - a[1]) * last_u)
-                p1 = (a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u)
+                p1 = (a[0] + (b[0] - a[0]) * u_wait, a[1] + (b[1] - a[1]) * u_wait)
                 t0 = start_time + waiting + last_u * duration
-                activities.append(Activity("flight", t0, enter, p0, p1, z.zid))
-            p = (a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u)
-            delay = z.end - enter + EPS
-            activities.append(Activity("wait", enter, enter + delay, p, p, z.zid))
+                activities.append(Activity("flight", t0, enter_w, p0, p1, z.zid))
+            p1 = (a[0] + (b[0] - a[0]) * u_wait, a[1] + (b[1] - a[1]) * u_wait)
+            delay = z.end - enter_w + EPS
+            activities.append(Activity("wait", enter_w, enter_w + delay, p1, p1, z.zid))
             waiting += delay
-            last_u = u
+            last_u = u_wait
 
     if last_u < 1.0 - EPS:
         p0 = (a[0] + (b[0] - a[0]) * last_u, a[1] + (b[1] - a[1]) * last_u)

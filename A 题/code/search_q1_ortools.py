@@ -132,6 +132,9 @@ def solve(
     initial_path: str | None,
     seed: int,
     log_search: bool,
+    metaheuristic: str,
+    multi_armed_bandit: bool,
+    gls_lambda: float,
 ) -> RouteCertificate:
     del seed  # RoutingSearchParameters 当前 Python API 不暴露随机种子字段。
     started = time.monotonic()
@@ -203,7 +206,14 @@ def solve(
 
     params = pywrapcp.DefaultRoutingSearchParameters()
     params.first_solution_strategy = routing_enums_pb2.FirstSolutionStrategy.PARALLEL_CHEAPEST_INSERTION
-    params.local_search_metaheuristic = routing_enums_pb2.LocalSearchMetaheuristic.GUIDED_LOCAL_SEARCH
+    try:
+        params.local_search_metaheuristic = getattr(
+            routing_enums_pb2.LocalSearchMetaheuristic, metaheuristic
+        )
+    except AttributeError as exc:
+        raise ValueError(f"未知元启发式: {metaheuristic}") from exc
+    params.use_multi_armed_bandit_concatenate_operators = multi_armed_bandit
+    params.guided_local_search_lambda_coefficient = gls_lambda
     params.time_limit.FromMilliseconds(max(1, int(round(time_limit * 1000.0))))
     params.log_search = log_search
     params.use_full_propagation = True
@@ -311,6 +321,30 @@ def main() -> None:
     parser.add_argument("--span-coefficient", type=int, default=100)
     parser.add_argument("--initial", help="含 ROUTES 行的可选热启动日志")
     parser.add_argument("--seed", type=int, default=20260817)
+    parser.add_argument(
+        "--metaheuristic",
+        choices=[
+            "AUTOMATIC",
+            "GREEDY_DESCENT",
+            "GUIDED_LOCAL_SEARCH",
+            "SIMULATED_ANNEALING",
+            "TABU_SEARCH",
+            "GENERIC_TABU_SEARCH",
+        ],
+        default="GUIDED_LOCAL_SEARCH",
+        help="OR-Tools 局部搜索元启发式",
+    )
+    parser.add_argument(
+        "--multi-armed-bandit",
+        action="store_true",
+        help="用多臂老虎机动态选择组合邻域算子",
+    )
+    parser.add_argument(
+        "--gls-lambda",
+        type=float,
+        default=0.1,
+        help="Guided Local Search 惩罚权重（默认 0.1）",
+    )
     parser.add_argument("--log-search", action="store_true")
     parser.add_argument("--output", help="可选 JSON 证书路径")
     args = parser.parse_args()
@@ -328,6 +362,9 @@ def main() -> None:
         initial_path=args.initial,
         seed=args.seed,
         log_search=args.log_search,
+        metaheuristic=args.metaheuristic,
+        multi_armed_bandit=args.multi_armed_bandit,
+        gls_lambda=args.gls_lambda,
     )
     print("\n", cert)
     if cert.routes is not None and cert.route_hours is not None:

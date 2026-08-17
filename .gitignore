@@ -16,3 +16,15 @@ desktop.ini
 ~$*.xlsx
 ~$*.docx
 ~$*.pptx
+
+# docs 目录只保留白名单文件（审计证据与总结），中间产物（json/日志）不提交
+A 题/docs/*
+!A 题/docs/audit_full_run.txt
+!A 题/docs/audit_q2_q3.txt
+!A 题/docs/q2_q3_summary.txt
+!A 题/docs/cycle_cover_bounds.txt
+!A 题/docs/aggregate_case1_n3.txt
+!A 题/docs/exact_case1_n3.txt
+!A 题/docs/exact_case3_n4_strengthened.txt
+!A 题/docs/问题一_初稿(1).docx
+!A 题/docs/case3_n4_evidence_index.md
