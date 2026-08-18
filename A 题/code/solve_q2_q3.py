@@ -97,9 +97,13 @@ def load_routes(path: str, sheet: str) -> list[list[int]]:
     wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
     ws = wb[sheet]
     routes = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if row[0] is not None:
-            routes.append([int(v) for v in row[1:] if v is not None])
+    for row in ws.iter_rows(values_only=True):
+        # 兼容带汇总信息的工作表：仅当首列为数字编号时才视为路线行
+        if not row or not isinstance(row[0], (int, float)):
+            continue
+        vals = [int(v) for v in row[1:] if isinstance(v, (int, float))]
+        if vals:
+            routes.append(vals)
     wb.close()
     return routes
 
